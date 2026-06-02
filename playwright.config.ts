@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import process from 'process';
 
 /**
  * Read environment variables from file.
@@ -26,7 +27,7 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('')`. */
-    // baseURL: 'http://localhost:3000',
+    baseURL: process.env.BASE_URL,
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
@@ -38,21 +39,56 @@ export default defineConfig({
   },
 
   /* Configure projects for major browsers */
-  projects: [
+projects: [
+    // 1. Technical project to handle global authorization (closes after saving session)
     {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      name: 'setup',
+      testMatch: /auth\.setup\.ts/,
+    },
+    
+    // 2. Main project for testing internal areas (Leads, forms, etc.)
+    {
+      name: 'chromium-e2e',
+      use: { 
+        ...devices['Desktop Chrome'],
+        // Automatically injects cookies from the setup project
+        storageState: 'playwright/.auth/user.json', 
+      },
+      // Forces this project to wait until 'setup' finishes successfully
+      dependencies: ['setup'], 
+      // Runs ONLY the tests located inside the 'tests/e2e' folder
+      testMatch: /e2e\/.*\.spec\.ts/, 
     },
 
+    // 3. Isolated project for testing the login form itself (No auto-login)
     {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
+      name: 'chromium-auth',
+      use: { 
+        ...devices['Desktop Chrome'],
+        // Explicitly clear any global storage states for a completely fresh browser session
+        storageState: { cookies: [], origins: [] },
+      },
+      // Notice: NO dependencies array here. 'setup' will NOT run before this project.
+      // Runs ONLY the tests located inside the 'tests/auth' folder
+      testMatch: /auth\/.*\.spec\.ts/, 
     },
+    // {
+    //   // name: 'firefox',
+    //   // use: { ...devices['Desktop Firefox'], 
+    //   // storageState: 'playwright/.auth/user.json',
+    //   // },
+    //   // dependencies: ['setup'],
+    //   // testMatch: /e2e\/.*\.spec\.ts/,
+    // },
 
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-    },
+    // {
+    //   name: 'webkit',
+    //   use: { ...devices['Desktop Safari'],
+    //   storageState: 'playwright/.auth/user.json',
+    //    },
+    //   dependencies: ['setup'],
+    //   testMatch: /e2e\/.*\.spec\.ts/,
+    // },
 
     /* Test against mobile viewports. */
     // {
